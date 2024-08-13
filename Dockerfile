@@ -58,7 +58,7 @@ RUN mkdir -p /tmp/yf-install
 # Alternatively copy in an installer that has been included image
 # (This will remove the wait time for downloading the installer during image creation)
 # Example syntax for copying in an embedded installer:
-COPY yellowfin-9.11.0.3-20240530-full.jar /tmp/yf-install/yellowfin.jar
+COPY yellowfin-9.12.0.3-20240808-full.jar /tmp/yf-install/yellowfin.jar
 
 COPY openjfx-18.0.1_linux-x64_bin-sdk.zip /tmp/yf-install/javafx.zip
 
