@@ -1,0 +1,1 @@
+docker run --name yellowfin-9.13.0 -d -p 8913:8080 --env-file ./.env yellowfin:9.13.0
