@@ -1,1 +1,1 @@
-docker build -t yellowfin:9.13.0 .
+docker build --no-cache -t yellowfin:9.13.0 .

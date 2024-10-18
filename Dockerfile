@@ -74,8 +74,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Set default enviroment variables
 ENV INSTALL_PATH=/opt/yellowfin
-ENV JDBC_CLASS_NAME=org.hsqldb.jdbc.JDBCDriver
-ENV JDBC_CONN_URL=jdbc:hsqldb:file://opt/yellowfin/data/configdb
+ENV JDBC_CONN_TYPE=HSQLDB
 ENV JDBC_CONN_USER=SA
 ENV JDBC_CONN_PASS=
 ENV APP_MEMORY=4096
@@ -112,10 +111,10 @@ COPY openjfx-18.0.1_linux-x64_bin-sdk.zip /tmp/javafx.zip
 # Create docker entry file, and mark file as docker entry-point
 #######################################################################################################
 
-# Create docker-entry file, that installs and then starts Yellowfin
-COPY docker-entry.sh /opt/
-RUN chmod +x /opt/docker-entry.sh
+# Create docker-entrypoint file, that installs and then starts Yellowfin
+COPY docker-entrypoint.sh /opt/
+RUN chmod +x /opt/docker-entrypoint.sh
 
-ENTRYPOINT ["/bin/sh", "/opt/docker-entry.sh"]
+ENTRYPOINT ["/bin/sh", "/opt/docker-entrypoint.sh"]
 
 EXPOSE 8080
