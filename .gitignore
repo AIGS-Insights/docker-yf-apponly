@@ -1,2 +1,5 @@
-openjfx-18.0.1_linux-x64_bin-sdk.zip
+openjfx-*.zip
 yellowfin-*.jar
+*.env
+environments/*
+generated/*

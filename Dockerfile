@@ -1,21 +1,62 @@
 #######################################################################################################
 #
-# Yellowfin All In One Docker File
+# Yellowfin Application-Server Only Docker File
 #
-# An image that will download the latest Yellowfin installer, and install it during Image creation.
-# This image includes a PostgreSQL repository built in.
+# An image that will create a new application server node, and connect to an existing Yellowfin
+# repository database.
 #
 # Options can be passed to the image on startup with the -e command
 #
-#  APP_MEMORY (Optional)             Amount of memory to allocate to the application
+#  JDBC_CLASS_NAME                  The java class file for the repository database JDBC connection
 #
-# Standard startup command would be something like:
+#  JDBC_CONN_URL                    The JDBC connection string for the repository database
 #
-# docker run -p 9090:8080 -e APP_MEMORY=4096 yellowfin-all-in-one
+#  JDBC_CONN_USER                   The JDBC user for the repository database
 #
-# (Which maps the docker port 8080 to 9090 on the host, and over-rides Yellowfin JVM memory to 4GB.)
+#  JDBC_CONN_PASS                   The JDBC password for the repository database (can be encrypted)
+#
+#  APP_MEMORY (Optional)			    Set maximum memory for application (in MB). 
+#
+#  LOG_LEVEL (Optional)   		    Set logfile verbosity. Options: INFO/DEBUG/ERROR/WARN/TRACE
+#
+#  JDBC_CONN_ENCRYPTED (Optional)   Whether the database password is encrypted or not. Defaults to false
+#
+#  JDBC_MAX_COUNT (Optional)        Maximum connection pool size for the repository database connection pool. Defaults to 25
+#
+#  WELCOME_PAGE (Optional)          The default landing page for the application. Defaults to index_mi.jsp
+#
+#  APP_SERVER_PORT (Optional)       The HTTP port for the application. Defaults to 8080
+#
+#  APP_SHUTDOWN_PORT (Optional)     The shutdown port for the application. Defaults to 8083
+#
+#  PROXY_PORT (Optional)			    External proxy port
+#
+#  PROXY_SCHEME (Optional)          External proxy scheme (http or https)
+#
+#  PROXY_HOST (Optional)			    External proxy address
+#
+#  SECURE_ENABLED (Optional)	        Enable secure=true in tomcat connector configuration
+#
+#  SAMESITE_COOKIE_MODE (Optional)  Set Same-Site cookie mode. Options: unset/none/lax/strict   Default: none
+#
+#  CLUSTER_ADDRESS (Optional)	    Set cluster communication TCP address for node
+# 
+#  CLUSTER_PORT (Optional) 	        Set cluster communication TCP port. Unique for this container. 
+#
+#  CLUSTER_INTERFACE (Optional)     Set cluster communication network interface. Default: eth0
+#
+#  NODE_BACKGROUND_TASKS (Optional) Define the types of background tasks that can run on this cluster node
+#
+#  NODE_PARALLEL_TASKS (Optional)   Define the number of parallel task that can run on this cluster node
+#
+#  LIBRARY_ZIP (Optional)           Deploy additional file assets into the application server library folder from a specific URL
+#
+#  CONTENT_ZIP (Optional)           Deploy additional file assets into the application server folder structure from a specific URL
+#
+#  SKIP_OS_PACKAGE_UPGRADE (Optional) Skip operating system package upgrades on node startup
 #
 #######################################################################################################
+
 
 #######################################################################################################
 # Fetch the base operating system
@@ -23,25 +64,30 @@
 # The installer can be downloaded during provisioning, or by providing the JAR file as part of image
 #######################################################################################################
 
-# From Ubuntu 20 base image
-FROM ubuntu:22.04
+# From Ubuntu LTS base image
+FROM ubuntu:24.04
+ARG APP_VERSION
+ARG APP_BUILD
 LABEL maintainer="AIGS Support <support@aigs.co.za>"
-LABEL description="Yellowfin 9.11.0.3"
+LABEL description="Yellowfin Application Only ${APP_VERSION}"
 
 # Timezone setup
 ENV TZ=Africa/Johannesburg
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Install OS applications required for application installation and setup Java
-RUN apt update && apt install unzip tar curl openjdk-11-jdk fonts-dejavu fontconfig -y
-
+RUN apt-get update -y && apt-get upgrade -y && apt-get install -y unzip tar curl sed fonts-dejavu \
+ fontconfig libglib2.0-0 libpangoft2-1.0-0 openjdk-11-jdk
+ 
 #Configure Java 11 using Zulu 11 JDK
-#RUN mkdir /usr/lib/jvm -p 
-#COPY zulu11.41.23-ca-fx-jdk11.0.8-linux_x64.tar.gz /usr/lib/jvm/zulu11.tar.gz
-#RUN cd /usr/lib/jvm/ && tar -xzvf zulu11.tar.gz && mv zulu11.41* zulu11-jdk/ && rm zulu11.tar.gz
-
-#ENV JAVA_HOME=/usr/lib/jvm/zulu11-jdk/
+#COPY assets/zulu11.41.23-ca-fx-jdk11.0.8-linux_x64.tar.gz /usr/lib/jvm/zuluJava.tar.gz
+#RUN mkdir /usr/lib/jvm -p && cd /usr/lib/jvm/ && curl -o zuluJava.tar.gz https://cdn.azul.com/zulu/bin/zulu21.44.17-ca-fx-jdk21.0.8-linux_x64.tar.gz \
+#&& cd /usr/lib/jvm/ && mkdir zulu-jdk && tar -xzf zuluJava.tar.gz -C zulu-jdk --strip-components=1 && rm zuluJava.tar.gz
+#ENV JAVA_HOME=/usr/lib/jvm/zulu-jdk/
 #ENV PATH="$JAVA_HOME/bin:$PATH"
+ENV JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+ENV PATH="$JAVA_HOME/bin:$PATH"
+
 
 #######################################################################################################
 # Fetch the Yellowfin installer
@@ -49,36 +95,32 @@ RUN apt update && apt install unzip tar curl openjdk-11-jdk fonts-dejavu fontcon
 # The installer can be downloaded during provisioning, or by providing the JAR file as part of image
 #######################################################################################################
 
-RUN mkdir -p /tmp/yf-install 
-
 # Download Yellowfin installer JAR
 # (This may slow down image creation time)
-#RUN curl -qL "{$(curl https://build-api.yellowfin.bi/fetch-latest-build)}" -o /tmp/yf-install/yellowfin.jar
+#RUN curl -qL https://files.yellowfin.bi/downloads/9.3/yellowfin-9.3.0-20201008-full.jar -o /tmp/yellowfin.jar
 
 # Alternatively copy in an installer that has been included image
 # (This will remove the wait time for downloading the installer during image creation)
 # Example syntax for copying in an embedded installer:
-COPY yellowfin-9.13.0-20240906-full.jar /tmp/yf-install/yellowfin.jar
-
-COPY openjfx-18.0.1_linux-x64_bin-sdk.zip /tmp/yf-install/javafx.zip
+COPY assets/yellowfin-${APP_VERSION}-${APP_BUILD}-full.jar /tmp/yellowfin.jar
 
 #######################################################################################################
 # Perform filesystem installation
 #
-# Prepare directories for PostgreSQL and Yellowfin.
+# Extract assets directly from Yellowfin installer JAR onto filesystem.
 #######################################################################################################
 
-# Prepare Yellowfin filesystem directories
-RUN mkdir -p /opt/yellowfin &&  chmod a+w /opt/yellowfin
+# Create working directory structure
+RUN mkdir -p /opt/yellowfin /tmp/yftemp /tmp/yftemp2/appserver/webapps/ROOT /opt/yellowfin/appserver/logs
 
-#######################################################################################################
-# Prepare Yellowfin Installation
-#
-# Create silent installation file, start PostgreSQL and run the silent installer
-#######################################################################################################
+# Perform application extraction
+RUN unzip /tmp/yellowfin.jar -d /tmp/yftemp && unzip /tmp/yftemp/yfres/yellowfin.zip -d /tmp/yftemp2 \
+&& unzip /tmp/yftemp2/yellowfin.war -d /tmp/yftemp2/appserver/webapps/ROOT \
+&& cp /tmp/yftemp/yfres/jdbc-drivers/* /tmp/yftemp2/appserver/webapps/ROOT/WEB-INF/lib \
+&& rm /tmp/yftemp2/yellowfin.war && cp -a /tmp/yftemp2/* /opt/yellowfin/ \
+&& rm -rf /tmp/yftemp /tmp/yftemp2 /tmp/yellowfin.jar
+RUN chmod +x /opt/yellowfin/appserver/bin/catalina.sh /opt/yellowfin/appserver/bin/startup.sh /opt/yellowfin/appserver/bin/shutdown.sh
 
-# Copy default silent installer properties file
-COPY default.properties /tmp/yf-install/custom.properties
 
 #######################################################################################################
 # Configuration
@@ -86,15 +128,36 @@ COPY default.properties /tmp/yf-install/custom.properties
 # Modify Yellowfin's configuration based on parameters passed to the docker container.
 #######################################################################################################
 
-COPY docker_configuration.sh /opt/yellowfin/
-RUN chmod +x /opt/yellowfin/docker_configuration.sh
+COPY assets/docker_configuration.sh /opt/yellowfin/appserver/bin
+RUN chmod +x /opt/yellowfin/appserver/bin/docker_configuration.sh
+RUN sed -i 's/exec "$PRGDIR"\/"$EXECUTABLE" start "$@"/\/opt\/yellowfin\/appserver\/bin\/docker_configuration.sh\nexec "$PRGDIR"\/"$EXECUTABLE" run "$@"/g' /opt/yellowfin/appserver/bin/startup.sh
 
 #######################################################################################################
-# Prepare Yellowfin Launcher
+# Installation Customization
 #
-# Create docker entry file, and mark file as docker entry-point
+# Copy and configure additional assets for the Yellowfin installation. This could include:
+#
+# - Providing support for additional databases (by including JDBC drivers)
+# - Providing custom styling
+# - Providing a custom index page
+# - Providing additional plug-ins (third-party sources, analytic functions, formatters etc)
+# - Providing a SSL certificate to tomcat
+#
 #######################################################################################################
 
-ENTRYPOINT ["/bin/sh", "/opt/yellowfin/docker_configuration.sh"]
 
-EXPOSE 8080
+# Install additional Yellowfin dependencies, including JDBC Drivers and custom plugins
+# Example of downloading drivers at startup time:
+# RUN curl -qL "https://cdn.mysql.com//Downloads/Connector-J/mysql-connector-java-8.0.18.tar.gz" | tar --strip=1 -C /opt/yellowfin/appserver/lib/ -xz mysql-connector-java-8.0.18/mysql-connector-java-8.0.18.jar
+# RUN curl -qL "https://jdbc.postgresql.org/download/postgresql-42.2.8.jar" -o /opt/yellowfin/appserver/lib/postgresql-42.2.8.jar
+
+# Example of copying in drivers that are part of the docker image:
+# COPY postgresql-42.2.8.jar /opt/yellowfin/appserver/lib/postgresql-42.2.8.jar
+
+#######################################################################################################
+# Launch Yellowfin
+#
+# Start the Yellowfin application.
+#######################################################################################################
+WORKDIR /opt/yellowfin/appserver/bin
+CMD ["/opt/yellowfin/appserver/bin/startup.sh"]
